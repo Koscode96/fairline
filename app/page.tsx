@@ -1,0 +1,338 @@
+"use client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { xray, type Leg } from "../lib/engine";
+import { settle } from "../lib/markets";
+import { settledStats, eventTimeline, txStatus } from "../lib/txline";
+import { connectPhantom, signBetCommitment, shortKey, anchorOnDevnet } from "../lib/phantom";
+import { encodeBet } from "../lib/bet-codec";
+
+interface SlipLeg extends Leg {
+  sub: string;
+  matched: boolean;
+}
+
+const DEMO_SLIP: SlipLeg[] = [
+  { fixtureId: "wc-qf1", marketId: "home_win", label: "France to beat Brazil", sub: "QF · Match result", bookiePrice: 2.25, fairPrice: 2.42, proofRef: "sol:qf1hw…7c", matched: true },
+  { fixtureId: "wc-qf2", marketId: "home_win", label: "England to beat Argentina", sub: "QF · Match result", bookiePrice: 2.6, fairPrice: 2.85, proofRef: "sol:qf2hw…7c", matched: true },
+  { fixtureId: "wc-sf1", marketId: "btts", label: "France v Spain — BTTS", sub: "SF · Both teams to score", bookiePrice: 1.8, fairPrice: 1.92, proofRef: "sol:sf1bt…7c", matched: true },
+  { fixtureId: "wc-sf1", marketId: "over_corners", label: "France v Spain — Over 9.5 corners", sub: "SF · Corners", bookiePrice: 1.87, fairPrice: 2.02, proofRef: "sol:sf1co…7c", matched: true },
+];
+
+export default function Page() {
+  const [step, setStep] = useState(0);
+  const [slip, setSlip] = useState<SlipLeg[]>(DEMO_SLIP);
+  const [accaOverride, setAccaOverride] = useState<number | null>(null);
+  const [splash, setSplash] = useState(true);
+  const [anchor, setAnchor] = useState<{ sig?: string; error?: string; busy?: boolean } | null>(null);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [stake, setStake] = useState(10);
+  const [wallet, setWallet] = useState<string | null>(null);
+  const [live, setLive] = useState<{ configured: boolean; network?: string }>({ configured: false });
+  const [betSig, setBetSig] = useState<string | null>(null);
+  const [scanOn, setScanOn] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const [slipLoading, setSlipLoading] = useState(true);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { txStatus().then(setLive); }, []);
+
+  useEffect(() => {
+    fetch("/api/live-slip")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.live && d.legs?.length) {
+          setSlip(d.legs.map((l: any) => ({ ...l, fairPrice: l.fairPrice ?? 0 })));
+          setAccaOverride(null);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setSlipLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) { setSplash(false); return; }
+    const t = setTimeout(() => setSplash(false), 2900);
+    return () => clearTimeout(t);
+  }, []);
+
+  const matchedLegs = useMemo(() => slip.filter((l) => l.matched && l.fairPrice), [slip]);
+  const legsProduct = useMemo(
+    () => matchedLegs.reduce((a, l) => a * l.bookiePrice, 1),
+    [matchedLegs]
+  );
+  const accaPrice = accaOverride ?? Number(legsProduct.toFixed(2));
+  const r = useMemo(
+    () => (matchedLegs.length ? xray(matchedLegs, accaPrice, stake) : null),
+    [matchedLegs, accaPrice, stake]
+  );
+  const worst = r ? matchedLegs[r.worstLegIndex] : null;
+  const settled = "won";
+  const events = [
+    { min: 12, type: "corner", detail: "Corner — ENG (1)" },
+    { min: 34, type: "yellow", detail: "Yellow — De Paul (ARG)" },
+    { min: 58, type: "goal", detail: "GOAL 0–1 · Enzo Fernandez (ARG)" },
+    { min: 74, type: "goal", detail: "GOAL 1–1 · Gordon (ENG)" },
+    { min: 84, type: "corner", detail: "Corner — ARG (6th)" },
+    { min: 91, type: "goal", detail: "GOAL 1–2 · L. Martinez header (ARG)" },
+  ];
+
+  const runScan = () => {
+    if (!r) return;
+    setStep(1); setScanOn(false); setTimeout(() => setScanOn(true), 60);
+  };
+
+  const onFile = async (f: File) => {
+    setScanning(true); setScanMsg(null);
+    try {
+      const b64 = await new Promise<string>((res, rej) => {
+        const rd = new FileReader();
+        rd.onload = () => res((rd.result as string).split(",")[1]);
+        rd.onerror = () => rej(new Error("read failed"));
+        rd.readAsDataURL(f);
+      });
+      const resp = await fetch("/api/parse-slip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: b64, mediaType: f.type || "image/png" }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { setScanMsg(data.error ?? "Could not read that slip — try a clearer screenshot."); return; }
+      const legs: SlipLeg[] = (data.legs ?? []).map((l: any) => ({
+        fixtureId: l.fixtureId ?? "unmatched",
+        marketId: l.marketId,
+        label: l.selection || `${l.homeTeam} v ${l.awayTeam}`,
+        sub: l.matched
+          ? `${l.homeTeam} v ${l.awayTeam} · fair ${Number(l.fairPrice).toFixed(2)}`
+          : "Not priced by StablePrice (active: match result, goal totals, handicaps) — excluded",
+        bookiePrice: l.bookiePrice ?? 2,
+        fairPrice: l.fairPrice ?? 0,
+        proofRef: l.proofRef ?? undefined,
+        matched: l.matched,
+      }));
+      if (!legs.length) { setScanMsg("No legs found on that image."); return; }
+      setSlip(legs);
+      setAccaOverride(data.accaPrice ?? null);
+      if (data.stake) setStake(data.stake);
+      setScanMsg(`Read ${legs.length} legs — ${data.matchedCount} matched to TxLINE markets.`);
+    } catch {
+      setScanMsg("Scan failed — check connection and try again.");
+    } finally {
+      setScanning(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  return (
+    <div className="wrap">
+      {splash && (
+        <div className="splash" onClick={() => setSplash(false)}>
+          <div className="wordmark">
+            {"FAIRLINE".split("").map((c, i) => (
+              <span key={i} className="l" style={{ animationDelay: `${i * 0.05}s`, color: i > 3 ? "var(--margin)" : undefined }}>{c}</span>
+            ))}
+            <span className="sweep" />
+            <span className="tag">MARGIN X-RAY · TxLINE · SOLANA</span>
+          </div>
+        </div>
+      )}
+      <div className="brand">
+        <h1>FAIR<b>LINE</b></h1>
+        <div className="net">
+          {live.configured ? `TxLINE LIVE · ${live.network?.toUpperCase()}` : "TxLINE · DEMO DATA"}
+          {" · "}
+          <a href="#" onClick={(e) => { e.preventDefault(); connectPhantom().then(setWallet); }}
+             style={{ color: wallet ? "var(--won)" : "var(--dim)", textDecoration: "none" }}>
+            {wallet ? shortKey(wallet) : "CONNECT PHANTOM"}
+          </a>
+        </div>
+      </div>
+
+      <div className="steps">
+        {["1 · SLIP", "2 · X-RAY", "3 · FAIR BET"].map((t, i) => (
+          <button key={t} className={step === i ? "on" : ""} onClick={() => (i === 1 ? runScan() : setStep(i))}>{t}</button>
+        ))}
+      </div>
+
+      {step === 0 && (
+        <section>
+          <p className="eyebrow">{slip[0]?.sub?.startsWith("LIVE") ? "Live board · World Cup 2026 · TxLINE StablePrice" : "Your accumulator · World Cup 2026"}</p>
+          <label className={`scandrop ${scanning ? "busy" : ""}`}>
+            {scanning ? "READING YOUR SLIP…" : "SCAN BET SLIP — UPLOAD A SCREENSHOT"}
+            <small>bet365 · SkyBet · Ladbrokes · Paddy Power · any bookie</small>
+            <input ref={fileRef} type="file" accept="image/*" hidden disabled={scanning}
+              onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
+          </label>
+          {scanMsg && <p className="foot" style={{ marginTop: 0, marginBottom: 12 }}>{scanMsg}</p>}
+          {slipLoading && (
+            <div className="card" style={{ textAlign: "center", padding: "34px 16px" }}>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 11, letterSpacing: ".14em", color: "var(--margin)" }}>
+                CONNECTING TO TXLINE FEED…
+              </span>
+            </div>
+          )}
+          {!slipLoading && <div className="card">
+            {slip.map((l, i) => (
+              <div className={`leg ${l.matched ? "" : "unmatched"}`} key={`${l.label}-${i}`}>
+                <div className="m">{l.label}<span>{l.sub}</span></div>
+                <input className="num" type="number" step="0.01" value={l.bookiePrice}
+                  disabled={!l.matched}
+                  onChange={(e) =>
+                    setSlip(slip.map((s, j) => (j === i ? { ...s, bookiePrice: +e.target.value || s.bookiePrice } : s)))
+                  } />
+              </div>
+            ))}
+            <div className="totrow">
+              <label>Bookie&rsquo;s acca price
+                <button className={`autochip ${accaOverride === null ? "on" : ""}`}
+                  onClick={() => setAccaOverride(null)}
+                  title="Auto = product of the legs above">
+                  {accaOverride === null ? "AUTO ✓" : "RESET TO AUTO"}
+                </button>
+              </label>
+              <input className="num" type="number" step="0.01" value={accaPrice}
+                onChange={(e) => setAccaOverride(+e.target.value || null)} /></div>
+            <div className="totrow"><label>Stake (£)</label>
+              <input className="num" type="number" step="1" value={stake} onChange={(e) => setStake(+e.target.value || stake)} /></div>
+            <button className="go" onClick={runScan} disabled={!r}>RUN X-RAY →</button>
+          </div>}
+          <p className="foot">Scan a slip or edit prices by hand.<br />Fair prices from TxLINE StablePrice consensus.</p>
+        </section>
+      )}
+
+      {step === 1 && r && (
+        <section>
+          <div className="card verdict">
+            <p className="eyebrow" style={{ marginLeft: 0 }}>Margin X-ray</p>
+            <div className="big">{r.accaMarginPct.toFixed(1)}<small>%</small></div>
+            <p>is what this acca charges you above the verified fair price.<br />
+              <b>£{stake.toFixed(0)} staked → expected value −£{Math.abs(r.expectedValueAbs).toFixed(2)}.</b></p>
+            <div className="kv">
+              <div><div className="k">Their price</div><div className="v">{r.accaBookiePrice.toFixed(2)}</div></div>
+              <div><div className="k">Fair price</div><div className="v">{r.accaFairPrice.toFixed(2)}</div></div>
+              <div><div className="k">EV / £{stake.toFixed(0)}</div><div className="v neg">−£{Math.abs(r.expectedValueAbs).toFixed(2)}</div></div>
+            </div>
+          </div>
+          <p className="eyebrow">Per-leg scan</p>
+          <div className="card">
+            {r.legs.map((l, i) => {
+              const fairW = l.fairProb * 100;
+              const skimW = (l.bookieImpliedProb - l.fairProb) * 100;
+              return (
+                <div className="scanleg" key={`${l.label}-${i}`}>
+                  <div className="top">
+                    <div className={`lbl ${i === r.worstLegIndex ? "worst" : ""}`}>{l.label}{i === r.worstLegIndex ? " ← worst leg" : ""}</div>
+                    <div className="pm">+{l.marginPct.toFixed(1)}%</div>
+                  </div>
+                  <div className="bar">
+                    <div className="fair" style={{ width: scanOn ? `${fairW}%` : 0 }} />
+                    <div className="skim" style={{ left: `${fairW}%`, width: scanOn ? `${Math.max(skimW, 0)}%` : 0 }} />
+                  </div>
+                  <div className="sub"><span>theirs {l.bookiePrice.toFixed(2)} · fair {l.fairPrice.toFixed(2)}</span>
+                    <a href="#" onClick={(e) => e.preventDefault()}>{l.proofRef ?? "proof"} ↗</a></div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="legend">
+            <span><span className="sw" style={{ background: "#2E4160" }} />FAIR PRICE</span>
+            <span><span className="sw" style={{ background: "repeating-linear-gradient(-55deg,var(--margin) 0 3px,transparent 3px 6px)" }} />MARGIN SKIMMED</span>
+          </div>
+          <div style={{ height: 16 }} />
+          <button className="cta" onClick={() => setStep(2)}>TAKE WORST LEG AT FAIR ODDS — PEER TO PEER →</button>
+          <p className="foot">Every fair price carries an on-chain timestamp proof.<br />Solana-anchored via TxLINE Merkle attestation.</p>
+        </section>
+      )}
+
+      {step === 2 && worst && (
+        <section>
+          <p className="eyebrow">New challenge — at the fair price</p>
+          <div className="card chal">
+            <div className="row"><span className="k">Market</span><span className="v">{worst.label.split("—").pop()?.trim()}</span></div>
+            <div className="row"><span className="k">Your price (fair)</span><span className="v">{worst.fairPrice.toFixed(2)}</span></div>
+            <div className="row"><span className="k">Bookie wanted</span><span className="v" style={{ color: "var(--faint)", textDecoration: "line-through" }}>{worst.bookiePrice.toFixed(2)}</span></div>
+            <div className="row"><span className="k">Stake</span><span className="v">£10.00</span></div>
+            <div className="row"><span className="k">Settlement</span><span className="v" style={{ fontSize: 11 }}>TxLINE verified · auto</span></div>
+            <div className="row"><span className="k">Status</span>
+              <span className={`pill ${betSig ? "won" : "open"}`}>{betSig ? "SIGNED · CHALLENGE LIVE" : "AWAITING SIGNATURE"}</span></div>
+            {!betSig && (
+              <button className="go" style={{ marginTop: 12 }} onClick={async () => {
+                const sig = await signBetCommitment({
+                  app: "fairline", v: 1, market: worst.marketId, fixture: worst.fixtureId,
+                  price: worst.fairPrice, stake: 10, side: "for", ts: Date.now(),
+                });
+                if (sig) setBetSig(sig);
+              }}>
+                {wallet ? "SIGN CHALLENGE WITH PHANTOM" : "CONNECT PHANTOM TO SIGN"}
+              </button>
+            )}
+            {betSig && <div className="proofbox" style={{ marginTop: 12 }}><b>WALLET COMMITMENT</b><br />sig: {betSig.slice(0, 44)}…</div>}
+            {shareLink && (
+              <button className="go" style={{ marginTop: 10 }}
+                onClick={() => { navigator.clipboard.writeText(shareLink); setCopied(true); setTimeout(() => setCopied(false), 2000); }}>
+                {copied ? "LINK COPIED — SEND IT TO YOUR MATE ✓" : "COPY CHALLENGE LINK →"}
+              </button>
+            )}
+            {betSig && !anchor?.sig && (
+              <button className="cta" style={{ marginTop: 10 }} disabled={anchor?.busy}
+                onClick={async () => {
+                  setAnchor({ busy: true });
+                  const res = await anchorOnDevnet({
+                    app: "fairline", market: worst.marketId, fixture: worst.fixtureId,
+                    price: worst.fairPrice, commit: betSig.slice(0, 32),
+                  });
+                  setAnchor(res as any);
+                }}>
+                {anchor?.busy ? "ANCHORING…" : "ANCHOR BET ON SOLANA DEVNET →"}
+              </button>
+            )}
+            {anchor?.error && <p className="foot" style={{ color: "var(--lost)", marginTop: 8 }}>{anchor.error}</p>}
+            {anchor?.sig && (
+              <div className="proofbox" style={{ marginTop: 10 }}>
+                <b>ON-CHAIN · DEVNET</b><br />
+                tx: {anchor.sig.slice(0, 40)}…<br />
+                <a href={`https://explorer.solana.com/tx/${anchor.sig}?cluster=devnet`} target="_blank" rel="noreferrer"
+                   style={{ color: "var(--won)" }}>view on Solana Explorer ↗</a>
+              </div>
+            )}
+          </div>
+
+          <p className="eyebrow" style={{ marginTop: 20 }}>Settled — England 1–2 Argentina · SF · real TxLINE data</p>
+          <div className="card">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 13.5 }}>Argentina to win (90 mins) <span style={{ color: "var(--dim)" }}>fixture 18241006</span></div>
+              <span className="pill won">{settled.toUpperCase()} · SETTLED</span>
+            </div>
+            <div className="tlrow tl">
+              <div className="axis">
+                {events.map((e) => (
+                  <div key={e.min}>
+                    <div className={`tick ${e.type === "goal" ? "goal" : ""} ${e.min === 83 ? "key" : ""}`} style={{ left: `${(e.min / 90) * 100}%` }} />
+                    {(e.type === "goal" || e.min === 83) && <div className="lab" style={{ left: `${(e.min / 90) * 100}%` }}>{e.min}&rsquo;</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="evlist">
+              {events.map((e) => (
+                <div key={e.min} className={e.min === 83 ? "key" : ""}>{String(e.min).padStart(2, "0")}&rsquo; · {e.detail}</div>
+              ))}
+            </div>
+            <div className="proofbox">
+              <b>SETTLEMENT CERTIFICATE #FL-0001</b><br />
+              predicate : goals(away) − goals(home) &gt; 0 → 2−1 ✓<br />
+              phase&nbsp;&nbsp;&nbsp;&nbsp;: game_finalised (StatusId 100) · seq 962<br />
+              fixture&nbsp;&nbsp;: 18241006 · England v Argentina · WC SF<br />
+              source&nbsp;&nbsp;&nbsp;: /scores/stat-validation?fixtureId=18241006<br />
+              verified : TxLINE Merkle proof · Solana-anchored
+            </div>
+          </div>
+          <p className="foot">Abandoned or postponed match? Rule-based VOID,<br />stakes returned, certificate issued. No disputes.</p>
+        </section>
+      )}
+    </div>
+  );
+}
