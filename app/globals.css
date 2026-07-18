@@ -106,3 +106,20 @@
   .autochip{font-family:var(--mono);font-size:9px;letter-spacing:.1em;border:1px solid var(--line);color:var(--dim);border-radius:3px;padding:3px 7px;margin-left:8px;cursor:pointer;background:none}
   .autochip.on{color:var(--won);border-color:var(--won)}
   @media (prefers-reduced-motion: reduce){ .splash{display:none} .splash .l,.splash .sweep,.splash .tag{animation:none} }
+  .layout{display:block}
+  @media(min-width:1040px){
+    .layout{display:grid;grid-template-columns:minmax(0,520px) 330px;gap:26px;max-width:900px;margin:0 auto;align-items:start}
+    .wrap{max-width:none}
+    .boardcol{position:sticky;top:20px}
+  }
+  .mkfix{border-bottom:1px solid var(--line);padding:12px 0}
+  .mkfix:last-child{border-bottom:none}
+  .mkfix .mkhead{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:8px}
+  .mkfix .mkhead span{color:var(--dim);font-family:var(--mono);font-size:10px}
+  .mkrow{display:flex;align-items:center;gap:6px;margin:5px 0;flex-wrap:wrap}
+  .mkrow .mklabel{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--faint);width:52px;flex:none}
+  .mkpx{font-family:var(--mono);font-size:11.5px;font-variant-numeric:tabular-nums;color:var(--text);
+    background:var(--ink);border:1px solid var(--line);border-radius:4px;padding:5px 8px;cursor:pointer;white-space:nowrap}
+  .mkpx:hover{border-color:var(--margin);color:var(--margin)}
+  .mkpx small{color:var(--faint);margin-right:4px;font-size:9px}
+  .mknote{font-family:var(--mono);font-size:9.5px;color:var(--faint);letter-spacing:.06em;margin-top:8px;line-height:1.7}

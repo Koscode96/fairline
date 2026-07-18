@@ -34,6 +34,7 @@ export default function Page() {
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [slipLoading, setSlipLoading] = useState(true);
+  const [board, setBoard] = useState<any[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { txStatus().then(setLive); }, []);
@@ -49,6 +50,8 @@ export default function Page() {
       })
       .catch(() => {})
       .finally(() => setSlipLoading(false));
+    fetch("/api/market-board").then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.live) setBoard(d.fixtures); }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -79,6 +82,21 @@ export default function Page() {
     { min: 84, type: "corner", detail: "Corner — ARG (6th)" },
     { min: 91, type: "goal", detail: "GOAL 1–2 · L. Martinez header (ARG)" },
   ];
+
+  const addLeg = (fixtureId: string, marketId: string, line: number | undefined, label: string, fair: number) => {
+    const key = `${fixtureId}:${marketId}:${line ?? ""}`;
+    setSlip((s) => {
+      if (s.some((l) => `${l.fixtureId}:${l.marketId}:${(l as any).line ?? ""}` === key)) return s;
+      const cleaned = s.filter((l) => l.matched);
+      return [...cleaned, {
+        fixtureId, marketId, line, label,
+        sub: `LIVE · fair ${fair.toFixed(2)} · from market board`,
+        bookiePrice: Number((fair * 0.94).toFixed(2)), fairPrice: fair,
+        proofRef: "tx:board", matched: true,
+      } as any];
+    });
+    setAccaOverride(null);
+  };
 
   const runScan = () => {
     if (!r) return;
@@ -151,6 +169,8 @@ export default function Page() {
         </div>
       </div>
 
+      <div className="layout">
+      <div>
       <div className="steps">
         {["1 · SLIP", "2 · X-RAY", "3 · FAIR BET"].map((t, i) => (
           <button key={t} className={step === i ? "on" : ""} onClick={() => (i === 1 ? runScan() : setStep(i))}>{t}</button>
@@ -333,6 +353,42 @@ export default function Page() {
           <p className="foot">Abandoned or postponed match? Rule-based VOID,<br />stakes returned, certificate issued. No disputes.</p>
         </section>
       )}
+      </div>
+      <div className="boardcol">
+        <p className="eyebrow">Live TxLINE markets · tap a price to add</p>
+        <div className="card">
+          {!board && <p className="mknote">CONNECTING TO FEED…</p>}
+          {board?.map((f: any) => {
+            const ko = new Date(f.startTime).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
+            return (
+              <div className="mkfix" key={f.fixtureId}>
+                <div className="mkhead"><div>{f.home} v {f.away}</div><span>KO {ko}</span></div>
+                <div className="mkrow">
+                  <span className="mklabel">RESULT</span>
+                  {f.oneX2.home && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_win", undefined, `${f.home} to beat ${f.away}`, f.oneX2.home)}><small>1</small>{f.oneX2.home.toFixed(2)}</button>}
+                  {f.oneX2.draw && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "draw", undefined, `${f.home} v ${f.away} — Draw`, f.oneX2.draw)}><small>X</small>{f.oneX2.draw.toFixed(2)}</button>}
+                  {f.oneX2.away && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "away_win", undefined, `${f.away} to beat ${f.home}`, f.oneX2.away)}><small>2</small>{f.oneX2.away.toFixed(2)}</button>}
+                </div>
+                {f.goals.filter((g: any) => g.over || g.under).slice(0, 4).map((g: any) => (
+                  <div className="mkrow" key={`g${g.line}`}>
+                    <span className="mklabel">GOALS {g.line}</span>
+                    {g.over && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "over_goals", g.line, `${f.home} v ${f.away} — Over ${g.line} goals`, g.over)}><small>O</small>{g.over.toFixed(2)}</button>}
+                    {g.under && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "under_goals", g.line, `${f.home} v ${f.away} — Under ${g.line} goals`, g.under)}><small>U</small>{g.under.toFixed(2)}</button>}
+                  </div>
+                ))}
+                {f.handicap.filter((h: any) => h.home).slice(0, 3).map((h: any) => (
+                  <div className="mkrow" key={`h${h.line}`}>
+                    <span className="mklabel">AH {h.line}</span>
+                    <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_handicap", h.line, `${f.home} ${h.line >= 0 ? "+" : ""}${h.line} v ${f.away}`, h.home)}><small>1</small>{h.home.toFixed(2)}</button>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          <p className="mknote">StablePrice de-margined consensus · devnet<br />Priced: match result · goal totals · handicaps<br />Not priced: BTTS · corners · cards</p>
+        </div>
+      </div>
+      </div>
     </div>
   );
 }
