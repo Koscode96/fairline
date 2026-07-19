@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stablePrices, fixtures } from "../../../lib/mock";
-import { liveBoard, LiveMarket } from "../../../lib/txline-server";
+import { liveBoard, LiveMarket, cachedMarkets } from "../../../lib/txline-server";
 
 /**
  * POST { image: base64, mediaType } → parsed + matched slip.
@@ -121,7 +121,14 @@ export async function POST(req: NextRequest) {
   let liveCtx: LiveCtx = null;
   try {
     const board = await liveBoard();
-    if (board) liveCtx = { fixtures: board.upcoming, markets: board.markets };
+    liveCtx = { fixtures: [...(board?.upcoming ?? [])], markets: { ...(board?.markets ?? {}) } };
+    // Historical showcase: the World Cup final's frozen pre-KO book stays matchable
+    const finalMs = await cachedMarkets(18257739);
+    if (finalMs.length) {
+      liveCtx.fixtures.push({ fixtureId: 18257739, home: "Spain", away: "Argentina", startTime: 1784487600000, gameState: 3 } as any);
+      (liveCtx.markets as any)[18257739] = finalMs;
+    }
+    if (!liveCtx.fixtures.length) liveCtx = null;
   } catch {}
 
   const rawBets: any[] = Array.isArray(parsed.bets) && parsed.bets.length
