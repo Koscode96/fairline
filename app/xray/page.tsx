@@ -5,6 +5,7 @@ import { settle } from "../../lib/markets";
 import { settledStats, eventTimeline, txStatus } from "../../lib/txline";
 import { connectPhantom, signBetCommitment, shortKey, anchorOnDevnet } from "../../lib/phantom";
 import { encodeBet } from "../../lib/bet-codec";
+import { flag } from "../../lib/flags";
 import { encodeXray } from "../../lib/xray-codec";
 
 interface SlipLeg extends Leg {
@@ -34,6 +35,8 @@ export default function Page() {
   const [scanOn, setScanOn] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const [betGroups, setBetGroups] = useState<any[]>([]);
+  const [activeGroup, setActiveGroup] = useState(0);
   const [slipLoading, setSlipLoading] = useState(true);
   const [board, setBoard] = useState<any[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -109,6 +112,26 @@ export default function Page() {
   const runScan = () => {
     if (!r) return;
     setStep(1); setScanOn(false); setTimeout(() => setScanOn(true), 60);
+  };
+
+  const loadGroup = (g: any) => {
+    const legs: SlipLeg[] = (g.legs ?? []).map((l: any) => ({
+      fixtureId: l.fixtureId ?? "unmatched",
+      marketId: l.marketId,
+      line: l.line ?? undefined,
+      label: l.selection || `${l.homeTeam} v ${l.awayTeam}`,
+      sub: l.matched
+        ? `${l.homeTeam} v ${l.awayTeam} · fair ${Number(l.fairPrice).toFixed(2)}`
+        : "No fair price available for this market yet",
+      bookiePrice: l.bookiePrice ?? 2,
+      fairPrice: l.fairPrice ?? 0,
+      proofRef: l.proofRef ?? undefined,
+      matched: l.matched,
+      ko: l.ko ?? null,
+    } as any));
+    setSlip(legs);
+    setAccaOverride(g.comboPrice ?? null);
+    if (g.stake) setStake(g.stake);
   };
 
   const onFile = async (f: File) => {
@@ -199,6 +222,17 @@ export default function Page() {
               onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
           </label>
           {scanMsg && <p className="foot" style={{ marginTop: 0, marginBottom: 12 }}>{scanMsg}</p>}
+          {betGroups.length > 1 && (
+            <div className="mkrow" style={{ marginBottom: 12, flexWrap: "wrap" }}>
+              {betGroups.map((g, i) => (
+                <button key={i} className="mkpx"
+                  style={i === activeGroup ? { borderColor: "var(--margin)", color: "var(--margin)" } : {}}
+                  onClick={() => { setActiveGroup(i); loadGroup(g); }}>
+                  {g.label} · {g.matchedCount}/{g.legs.length} priced
+                </button>
+              ))}
+            </div>
+          )}
           {!slipLoading && slip.length === 0 && (
             <div className="card" style={{ textAlign: "center", padding: "30px 16px" }}>
               <span style={{ fontFamily: "var(--mono)", fontSize: 11, letterSpacing: ".1em", color: "var(--dim)" }}>
@@ -400,9 +434,9 @@ export default function Page() {
                 <div className="mkhead"><div>{f.home} v {f.away}</div><span>KO {ko}</span></div>
                 <div className="mkrow">
                   <span className="mklabel">RESULT</span>
-                  {f.oneX2.home && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_win", undefined, `${f.home} to beat ${f.away}`, f.oneX2.home)}><small>1</small>{f.oneX2.home.toFixed(2)}</button>}
+                  {f.oneX2.home && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_win", undefined, `${f.home} to beat ${f.away}`, f.oneX2.home)}><small>{flag(f.home)}</small>{f.oneX2.home.toFixed(2)}</button>}
                   {f.oneX2.draw && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "draw", undefined, `${f.home} v ${f.away} · Draw`, f.oneX2.draw)}><small>X</small>{f.oneX2.draw.toFixed(2)}</button>}
-                  {f.oneX2.away && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "away_win", undefined, `${f.away} to beat ${f.home}`, f.oneX2.away)}><small>2</small>{f.oneX2.away.toFixed(2)}</button>}
+                  {f.oneX2.away && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "away_win", undefined, `${f.away} to beat ${f.home}`, f.oneX2.away)}><small>{flag(f.away)}</small>{f.oneX2.away.toFixed(2)}</button>}
                 </div>
                 {f.goals.filter((g: any) => g.over || g.under).slice(0, 4).map((g: any) => (
                   <div className="mkrow" key={`g${g.line}`}>
@@ -414,8 +448,8 @@ export default function Page() {
                 {f.handicap.filter((h: any) => h.home || h.away).slice(0, 4).map((h: any) => (
                   <div className="mkrow" key={`h${h.line}`}>
                     <span className="mklabel">AH {h.line}</span>
-                    {h.home && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_handicap", h.line, `${f.home} ${h.line >= 0 ? "+" : ""}${h.line} v ${f.away}`, h.home)}><small>1</small>{h.home.toFixed(2)}</button>}
-                    {h.away && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "away_handicap", -h.line, `${f.away} ${-h.line >= 0 ? "+" : ""}${-h.line} v ${f.home}`, h.away)}><small>2</small>{h.away.toFixed(2)}</button>}
+                    {h.home && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_handicap", h.line, `${f.home} ${h.line >= 0 ? "+" : ""}${h.line} v ${f.away}`, h.home)}><small>{flag(f.home)}</small>{h.home.toFixed(2)}</button>}
+                    {h.away && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "away_handicap", -h.line, `${f.away} ${-h.line >= 0 ? "+" : ""}${-h.line} v ${f.home}`, h.away)}><small>{flag(f.away)}</small>{h.away.toFixed(2)}</button>}
                   </div>
                 ))}
               </div>

@@ -124,7 +124,11 @@ export async function POST(req: NextRequest) {
     if (board) liveCtx = { fixtures: board.upcoming, markets: board.markets };
   } catch {}
 
-  const legs = (parsed.legs ?? []).map((leg: any) => {
+  const rawBets: any[] = Array.isArray(parsed.bets) && parsed.bets.length
+    ? parsed.bets
+    : [{ kind: "acca", comboPrice: parsed.accaPrice ?? null, stake: parsed.stake ?? null, legs: parsed.legs ?? [] }];
+
+  const mapLegs = (legsIn: any[]) => legsIn.map((leg: any) => {
     const m = leg.market === "unknown" ? null : (matchLiveLeg(leg, liveCtx) ?? matchLeg(leg));
     return {
       selection: leg.selection ?? "",
@@ -141,10 +145,23 @@ export async function POST(req: NextRequest) {
     };
   });
 
+  const bets = rawBets.map((b: any, i: number) => {
+    const legs = mapLegs(b.legs ?? []);
+    return {
+      kind: b.kind ?? (legs.length > 1 ? "acca" : "single"),
+      comboPrice: b.comboPrice ?? null,
+      stake: b.stake ?? null,
+      legs,
+      matchedCount: legs.filter((l: { matched: boolean }) => l.matched).length,
+      label: `${(b.kind ?? "bet").toUpperCase()}${b.comboPrice ? ` @ ${Number(b.comboPrice).toFixed(2)}` : ""} · ${legs.length} leg${legs.length === 1 ? "" : "s"}`,
+    };
+  });
+  const first = bets[0];
   return NextResponse.json({
-    legs,
-    accaPrice: parsed.accaPrice ?? null,
-    stake: parsed.stake ?? null,
-    matchedCount: legs.filter((l: { matched: boolean }) => l.matched).length,
+    bets,
+    legs: first.legs,
+    accaPrice: first.comboPrice,
+    stake: first.stake,
+    matchedCount: first.matchedCount,
   });
 }
