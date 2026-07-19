@@ -5,6 +5,7 @@ import { settle } from "../../lib/markets";
 import { settledStats, eventTimeline, txStatus } from "../../lib/txline";
 import { connectPhantom, signBetCommitment, shortKey, anchorOnDevnet } from "../../lib/phantom";
 import { encodeBet } from "../../lib/bet-codec";
+import { encodeXray } from "../../lib/xray-codec";
 
 interface SlipLeg extends Leg {
   sub: string;
@@ -295,8 +296,12 @@ export default function Page() {
           <div style={{ height: 16 }} />
           <button className="cta" onClick={() => setStep(2)}>TAKE WORST LEG AT FAIR ODDS ON FAIRPLAY →</button>
           <button className="go" style={{ marginTop: 10 }} onClick={async () => {
-            const t = `My acca: bookie ${r.accaBookiePrice.toFixed(2)} vs fair ${r.accaFairPrice.toFixed(2)}. Paying ${r.accaMarginPct.toFixed(1)}% margin, EV ${r.expectedValueAbs < 0 ? "-" : ""}£${Math.abs(r.expectedValueAbs).toFixed(2)} on £${stake}. X-rayed on Fairline.`;
-            const res = await shareText(t, window.location.origin);
+            const cardUrl = `${window.location.origin}/x?d=${encodeXray({
+              v: 1, acca: r.accaBookiePrice, stake,
+              legs: slip.map((l) => ({ label: l.label, bookie: l.bookiePrice, fair: l.fairPrice, matched: l.matched })),
+            })}`;
+            const t = `My acca charges ${r.accaMarginPct.toFixed(1)}% over fair. X-rayed on Fairline:`;
+            const res = await shareText(t, cardUrl);
             setShared(res === "copied" ? "COPIED TO CLIPBOARD ✓" : res ? "SHARED ✓" : null);
             setTimeout(() => setShared(null), 2200);
           }}>{shared ?? "SHARE MY X-RAY"}</button>
