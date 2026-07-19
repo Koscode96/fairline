@@ -66,15 +66,19 @@ export default function Page() {
     return () => clearTimeout(t);
   }, []);
 
-  const matchedLegs = useMemo(() => slip.filter((l) => l.matched && l.fairPrice && l.bookiePrice > 1), [slip]);
+  const matchedLegs = useMemo(() => slip.filter((l) => l.matched && l.fairPrice), [slip]);
+  const legsForEngine = useMemo(
+    () => matchedLegs.map((l) => ({ ...l, bookiePrice: l.bookiePrice > 1 ? l.bookiePrice : l.fairPrice })),
+    [matchedLegs]
+  );
   const legsProduct = useMemo(
     () => matchedLegs.reduce((a, l) => a * l.bookiePrice, 1),
     [matchedLegs]
   );
   const accaPrice = accaOverride ?? Number(legsProduct.toFixed(2));
   const r = useMemo(
-    () => (matchedLegs.length ? xray(matchedLegs, accaPrice, stake) : null),
-    [matchedLegs, accaPrice, stake]
+    () => (legsForEngine.length ? xray(legsForEngine, accaPrice, stake) : null),
+    [legsForEngine, accaPrice, stake]
   );
   const [chosen, setChosen] = useState<number | null>(null);
   const worst = r ? matchedLegs[chosen ?? r.worstLegIndex] : null;
@@ -108,6 +112,12 @@ export default function Page() {
     try { await navigator.clipboard.writeText(`${text} ${url}`); return "copied"; } catch { return false; }
   };
   const [shared, setShared] = useState<string | null>(null);
+
+  const legKey = (l: any) => `${l.fixtureId}:${l.marketId}:${l.line ?? ""}:${l.label}`;
+  const updateLegPrice = (key: string, v: number) =>
+    setSlip((s) => s.map((l) => (legKey(l) === key ? { ...l, bookiePrice: v } : l)));
+  const removeLeg = (key: string) =>
+    setSlip((s) => s.filter((l) => legKey(l) !== key));
 
   const runScan = () => {
     if (!r) return;
@@ -225,8 +235,8 @@ export default function Page() {
           </label>
           {scanMsg && <p className="foot" style={{ marginTop: 0, marginBottom: 12 }}>{scanMsg}</p>}
           {slip.some((l: any) => l.matched && !(l.bookiePrice > 1)) && (
-            <p className="foot" style={{ margin: "0 2px 12px", textAlign: "left", color: "var(--margin)" }}>
-              Some leg prices were not shown on the slip. Enter them from your bookie&rsquo;s singles view to include those legs.
+            <p className="foot" style={{ margin: "0 2px 12px", textAlign: "left", color: "var(--dim)" }}>
+              Builders don&rsquo;t print leg prices. The combo X-rays as one bet; add leg prices from the singles view only if you want a per-leg breakdown.
             </p>
           )}
           {betGroups.length > 1 && (
@@ -260,12 +270,14 @@ export default function Page() {
                 <div className="m">{l.label}<span>{l.sub}</span></div>
                 <input className="num" type="number" step="0.01"
                   value={l.bookiePrice > 0 ? l.bookiePrice : ""}
-                  placeholder="price?"
-                  style={(l as any).priceRead === false && l.matched && !(l.bookiePrice > 1) ? { borderColor: "var(--margin)" } : {}}
+                  placeholder="—"
+                  
                   disabled={!l.matched}
                   onChange={(e) =>
-                    setSlip(slip.map((s, j) => (j === i ? { ...s, bookiePrice: +e.target.value || s.bookiePrice } : s)))
+                    setSlip(slip.map((s, j) => (j === i ? { ...s, bookiePrice: +e.target.value || 0 } : s)))
                   } />
+                <button className="mkpx" style={{ padding: "4px 8px", marginLeft: 6 }} title="Remove leg"
+                  onClick={() => setSlip(slip.filter((_, j) => j !== i))}>×</button>
               </div>
             ))}
             <div className="totrow">
@@ -293,6 +305,19 @@ export default function Page() {
             <div className="big">{r.accaMarginPct.toFixed(1)}<small>%</small></div>
             <p>is what this acca charges you above the verified fair price.<br />
               <b>£{stake.toFixed(0)} staked → expected value −£{Math.abs(r.expectedValueAbs).toFixed(2)}.</b></p>
+            <div className="mkrow" style={{ margin: "12px 0 2px", alignItems: "center" }}>
+              <span className="mklabel" style={{ width: "auto" }}>THEIR ACCA</span>
+              <input className="num" type="number" step="0.01" value={accaPrice}
+                style={{ width: 84, padding: "5px 7px" }}
+                onChange={(e) => setAccaOverride(+e.target.value || null)} />
+              <button className={`autochip ${accaOverride === null ? "on" : ""}`}
+                title="AUTO: recalculates as your leg prices multiplied. Click to snap back."
+                onClick={() => setAccaOverride(null)}>{accaOverride === null ? "AUTO ✓" : "RESET TO AUTO"}</button>
+              <span className="mklabel" style={{ width: "auto", marginLeft: 10 }}>STAKE £</span>
+              <input className="num" type="number" step="1" value={stake}
+                style={{ width: 64, padding: "5px 7px" }}
+                onChange={(e) => setStake(Math.max(1, +e.target.value || 1))} />
+            </div>
             <div className="kv">
               <div><div className="k">Their price</div><div className="v">{r.accaBookiePrice.toFixed(2)}</div></div>
               <div><div className="k">Fair price</div><div className="v">{r.accaFairPrice.toFixed(2)}</div></div>
@@ -314,12 +339,34 @@ export default function Page() {
                     <div className="fair" style={{ width: scanOn ? `${fairW}%` : 0 }} />
                     <div className="skim" style={{ left: `${fairW}%`, width: scanOn ? `${Math.max(skimW, 0)}%` : 0 }} />
                   </div>
-                  <div className="sub"><span>theirs {l.bookiePrice.toFixed(2)} · fair {l.fairPrice.toFixed(2)}</span>
+                  <div className="sub" style={{ alignItems: "center" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      theirs
+                      <input className="num" type="number" step="0.01" value={l.bookiePrice}
+                        style={{ width: 64, padding: "3px 5px", fontSize: 11 }}
+                        onChange={(e) => updateLegPrice(legKey(l), +e.target.value || 0)} />
+                      · fair {l.fairPrice.toFixed(2)}
+                      <button className="mkpx" style={{ padding: "2px 7px", fontSize: 10 }} title="Remove leg"
+                        onClick={() => removeLeg(legKey(l))}>×</button>
+                    </span>
                     <a href="#" onClick={(e) => e.preventDefault()}>verified ↗</a></div>
                 </div>
               );
             })}
           </div>
+          {matchedLegs.some((l) => !(l.bookiePrice > 1)) && (
+            <div className="card" style={{ marginTop: 12 }}>
+              {matchedLegs.filter((l) => !(l.bookiePrice > 1)).map((l, i) => (
+                <div className="scanleg" key={`np-${i}`}>
+                  <div className="top">
+                    <div className="lbl">{l.label}</div>
+                    <div className="pm" style={{ color: "var(--dim)" }}>IN COMBO</div>
+                  </div>
+                  <div className="sub"><span>fair {l.fairPrice.toFixed(2)} · leg price not printed on the slip</span></div>
+                </div>
+              ))}
+            </div>
+          )}
           {slip.some((l) => !l.matched) && (
             <div className="card" style={{ marginTop: 12 }}>
               {slip.filter((l) => !l.matched).map((l, i) => (
