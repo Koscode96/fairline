@@ -20,7 +20,7 @@ const DEMO_SLIP: SlipLeg[] = [
 
 export default function Page() {
   const [step, setStep] = useState(0);
-  const [slip, setSlip] = useState<SlipLeg[]>(DEMO_SLIP);
+  const [slip, setSlip] = useState<SlipLeg[]>([]);
   const [accaOverride, setAccaOverride] = useState<number | null>(null);
   const [splash, setSplash] = useState(true);
   const [anchor, setAnchor] = useState<{ sig?: string; error?: string; busy?: boolean } | null>(null);
@@ -72,7 +72,8 @@ export default function Page() {
     () => (matchedLegs.length ? xray(matchedLegs, accaPrice, stake) : null),
     [matchedLegs, accaPrice, stake]
   );
-  const worst = r ? matchedLegs[r.worstLegIndex] : null;
+  const [chosen, setChosen] = useState<number | null>(null);
+  const worst = r ? matchedLegs[chosen ?? r.worstLegIndex] : null;
   const settled = "won";
   const events = [
     { min: 34, type: "yellow", detail: "Yellow · De Paul (ARG)" },
@@ -87,7 +88,7 @@ export default function Page() {
       if (s.some((l) => `${l.fixtureId}:${l.marketId}:${(l as any).line ?? ""}` === key)) return s;
       const cleaned = s.filter((l) => l.matched);
       return [...cleaned, {
-        fixtureId, marketId, line, label,
+        fixtureId, marketId, line, label, ko: (board?.find((f: any) => f.fixtureId === fixtureId)?.startTime) ?? null,
         sub: `LIVE · fair ${fair.toFixed(2)} · from market board`,
         bookiePrice: Number((fair * 0.94).toFixed(2)), fairPrice: fair,
         proofRef: "tx:board", matched: true,
@@ -131,7 +132,7 @@ export default function Page() {
         label: l.selection || `${l.homeTeam} v ${l.awayTeam}`,
         sub: l.matched
           ? `${l.homeTeam} v ${l.awayTeam} · fair ${Number(l.fairPrice).toFixed(2)}`
-          : "Not priced by StablePrice (active: match result, goal totals, handicaps) · excluded",
+          : "No fair price available for this market yet",
         bookiePrice: l.bookiePrice ?? 2,
         fairPrice: l.fairPrice ?? 0,
         proofRef: l.proofRef ?? undefined,
@@ -159,14 +160,14 @@ export default function Page() {
               <span key={i} className="l" style={{ animationDelay: `${i * 0.05}s`, color: i > 3 ? "var(--margin)" : undefined }}>{c}</span>
             ))}
             <span className="sweep" />
-            <span className="tag">MARGIN X-RAY · TxLINE · SOLANA</span>
+            <span className="tag">KNOW WHAT YOUR BET IS REALLY WORTH</span>
           </div>
         </div>
       )}
       <div className="brand">
         <h1><a href="/" style={{ color: "inherit", textDecoration: "none" }}>FAIR<b>LINE</b></a></h1>
         <div className="net">
-          <a href={process.env.NEXT_PUBLIC_FAIRPLAY_URL ?? "#"} style={{ color: "var(--dim)", textDecoration: "none" }}>FAIRPLAY ↗</a>{" · "}{live.configured ? `TxLINE LIVE · ${live.network?.toUpperCase()}` : "DEMO"}
+          <a href={process.env.NEXT_PUBLIC_FAIRPLAY_URL ?? "#"} style={{ color: "var(--dim)", textDecoration: "none" }}>FAIRPLAY ↗</a>{" · "}{live.configured ? "LIVE ODDS · VERIFIED" : "DEMO MODE"}
           {" · "}
           <a href="#" onClick={(e) => { e.preventDefault(); connectPhantom().then(setWallet); }}
              style={{ color: wallet ? "var(--won)" : "var(--dim)", textDecoration: "none" }}>
@@ -196,14 +197,21 @@ export default function Page() {
               onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
           </label>
           {scanMsg && <p className="foot" style={{ marginTop: 0, marginBottom: 12 }}>{scanMsg}</p>}
-          {slipLoading && (
-            <div className="card" style={{ textAlign: "center", padding: "34px 16px" }}>
-              <span style={{ fontFamily: "var(--mono)", fontSize: 11, letterSpacing: ".14em", color: "var(--margin)" }}>
-                CONNECTING TO TXLINE FEED…
+          {!slipLoading && slip.length === 0 && (
+            <div className="card" style={{ textAlign: "center", padding: "30px 16px" }}>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 11, letterSpacing: ".1em", color: "var(--dim)" }}>
+                SCAN A SLIP OR TAP A LIVE PRICE ON THE BOARD →
               </span>
             </div>
           )}
-          {!slipLoading && <div className="card">
+          {slipLoading && (
+            <div className="card" style={{ textAlign: "center", padding: "34px 16px" }}>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 11, letterSpacing: ".14em", color: "var(--margin)" }}>
+                LOADING LIVE ODDS…
+              </span>
+            </div>
+          )}
+          {!slipLoading && slip.length > 0 && <div className="card">
             {slip.map((l, i) => (
               <div className={`leg ${l.matched ? "" : "unmatched"}`} key={`${l.label}-${i}`}>
                 <div className="m">{l.label}<span>{l.sub}</span></div>
@@ -228,7 +236,7 @@ export default function Page() {
               <input className="num" type="number" step="1" value={stake} onChange={(e) => setStake(+e.target.value || stake)} /></div>
             <button className="go" onClick={runScan} disabled={!r}>RUN X-RAY →</button>
           </div>}
-          <p className="foot">Scan a slip or edit prices by hand.<br />Fair prices from TxLINE StablePrice consensus.</p>
+          <p className="foot">Scan a slip or edit prices by hand.<br />Fair odds verified by TxODDS.</p>
         </section>
       )}
 
@@ -261,7 +269,7 @@ export default function Page() {
                     <div className="skim" style={{ left: `${fairW}%`, width: scanOn ? `${Math.max(skimW, 0)}%` : 0 }} />
                   </div>
                   <div className="sub"><span>theirs {l.bookiePrice.toFixed(2)} · fair {l.fairPrice.toFixed(2)}</span>
-                    <a href="#" onClick={(e) => e.preventDefault()}>{l.proofRef ?? "proof"} ↗</a></div>
+                    <a href="#" onClick={(e) => e.preventDefault()}>verified ↗</a></div>
                 </div>
               );
             })}
@@ -278,21 +286,30 @@ export default function Page() {
             setShared(res === "copied" ? "COPIED TO CLIPBOARD ✓" : res ? "SHARED ✓" : null);
             setTimeout(() => setShared(null), 2200);
           }}>{shared ?? "SHARE MY X-RAY"}</button>
-          <p className="foot">Every fair price carries an on-chain timestamp proof.<br />Solana-anchored via TxLINE Merkle attestation.</p>
+          <p className="foot">Every fair price is independently verifiable.<br />Nothing here is our opinion.</p>
         </section>
       )}
 
       {step === 2 && worst && (
         <section>
-          <p className="eyebrow">FairPlay · your challenge at the fair price</p>
+          <p className="eyebrow">FairPlay · pick a leg, post it at the fair price</p>
+          {matchedLegs.length > 1 && (
+            <div className="mkrow" style={{ marginBottom: 10, flexWrap: "wrap" }}>
+              {matchedLegs.map((l, i) => (
+                <button key={i} className="mkpx"
+                  style={i === (chosen ?? r!.worstLegIndex) ? { borderColor: "var(--margin)", color: "var(--margin)" } : {}}
+                  onClick={() => setChosen(i)}>{l.label.slice(0, 24)} · {l.fairPrice.toFixed(2)}</button>
+              ))}
+            </div>
+          )}
           <div className="card chal">
             <div className="row"><span className="k">Market</span><span className="v">{worst.label.split("·").pop()?.trim()}</span></div>
             <div className="row"><span className="k">Your price (fair)</span><span className="v">{worst.fairPrice.toFixed(2)}</span></div>
             <div className="row"><span className="k">Bookie wanted</span><span className="v" style={{ color: "var(--faint)", textDecoration: "line-through" }}>{worst.bookiePrice.toFixed(2)}</span></div>
             <div className="row"><span className="k">Stake</span><span className="v">£10.00</span></div>
-            <div className="row"><span className="k">Settlement</span><span className="v" style={{ fontSize: 11 }}>TxLINE verified · auto</span></div>
+            <div className="row"><span className="k">Settlement</span><span className="v" style={{ fontSize: 11 }}>Automatic · official result</span></div>
             <div className="row"><span className="k">Status</span>
-              <span className={`pill ${betSig ? "won" : "open"}`}>{betSig ? "SIGNED · READY FOR FAIRPLAY" : "AWAITING YOUR SIGNATURE"}</span></div>
+              <span className={`pill ${betSig ? "won" : "open"}`}>{betSig ? "LIVE ON FAIRPLAY BOARD · AWAITING TAKER" : "AWAITING YOUR SIGNATURE"}</span></div>
             {!betSig && (
               <button className="go" style={{ marginTop: 12 }} onClick={async () => {
                 const sig = await signBetCommitment({
@@ -304,7 +321,13 @@ export default function Page() {
                 {wallet ? "SIGN CHALLENGE WITH PHANTOM" : "CONNECT PHANTOM TO SIGN"}
               </button>
             )}
-            {betSig && <div className="proofbox" style={{ marginTop: 12 }}><b>WALLET COMMITMENT</b><br />sig: {betSig.slice(0, 44)}…</div>}
+            {betSig && <div className="proofbox" style={{ marginTop: 12 }}><b>SIGNED WITH YOUR WALLET ✓</b></div>}
+            {shareLink && (
+              <a href={process.env.NEXT_PUBLIC_FAIRPLAY_URL ?? "#"} target="_blank" rel="noreferrer" className="cta"
+                 style={{ marginTop: 10, display: "block", textAlign: "center", textDecoration: "none" }}>
+                VIEW IT ON THE FAIRPLAY BOARD ↗
+              </a>
+            )}
             {shareLink && (
               <button className="go" style={{ marginTop: 10 }}
                 onClick={() => { navigator.clipboard.writeText(shareLink); setCopied(true); setTimeout(() => setCopied(false), 2000); }}>
@@ -329,51 +352,21 @@ export default function Page() {
                   });
                   setAnchor(res as any);
                 }}>
-                {anchor?.busy ? "ANCHORING…" : "ANCHOR BET ON SOLANA DEVNET →"}
+                {anchor?.busy ? "RECORDING…" : "RECORD BET ON-CHAIN →"}
               </button>
             )}
             {anchor?.error && <p className="foot" style={{ color: "var(--lost)", marginTop: 8 }}>{anchor.error}</p>}
             {anchor?.sig && (
               <div className="proofbox" style={{ marginTop: 10 }}>
-                <b>ON-CHAIN · DEVNET</b><br />
+                <b>RECORDED ON-CHAIN ✓</b><br />
                 tx: {anchor.sig.slice(0, 40)}…<br />
                 <a href={`https://explorer.solana.com/tx/${anchor.sig}?cluster=devnet`} target="_blank" rel="noreferrer"
-                   style={{ color: "var(--won)" }}>view on Solana Explorer ↗</a>
+                   style={{ color: "var(--won)" }}>view proof ↗</a>
               </div>
             )}
           </div>
 
-          <p className="eyebrow" style={{ marginTop: 20 }}>Settled example · England v Argentina SF</p>
-          <div className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: 13.5 }}>Argentina to win (90 mins) <span style={{ color: "var(--dim)" }}>fixture 18241006</span></div>
-              <span className="pill won">{settled.toUpperCase()} · SETTLED</span>
-            </div>
-            <div className="tlrow tl">
-              <div className="axis">
-                {events.map((e) => (
-                  <div key={e.min}>
-                    <div className={`tick ${e.type === "goal" ? "goal" : ""} ${e.min === 83 ? "key" : ""}`} style={{ left: `${(e.min / 90) * 100}%` }} />
-                    {(e.type === "goal" || e.min === 83) && <div className="lab" style={{ left: `${(e.min / 90) * 100}%` }}>{e.min}&rsquo;</div>}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="evlist">
-              {events.map((e) => (
-                <div key={e.min} className={e.min === 83 ? "key" : ""}>{String(e.min).padStart(2, "0")}&rsquo; · {e.detail}</div>
-              ))}
-            </div>
-            <div className="proofbox">
-              <b>SETTLEMENT CERTIFICATE #FL-0001</b><br />
-              predicate : goals(away) − goals(home) &gt; 0 → 2−1 ✓<br />
-              phase&nbsp;&nbsp;&nbsp;&nbsp;: game_finalised (StatusId 100) · seq 962<br />
-              fixture&nbsp;&nbsp;: 18241006 · England v Argentina · WC SF<br />
-              source&nbsp;&nbsp;&nbsp;: /scores/stat-validation?fixtureId=18241006<br />
-              verified : TxLINE Merkle proof · Solana-anchored
-            </div>
-          </div>
-          <p className="foot">Abandoned or postponed match? Rule-based VOID,<br />stakes returned, certificate issued. No disputes.</p>
+                    <p className="foot">Abandoned or postponed match? Rule-based VOID,<br />stakes returned, certificate issued. No disputes.</p>
         </section>
       )}
       </div>
@@ -408,7 +401,7 @@ export default function Page() {
               </div>
             );
           })}
-          <p className="mknote">StablePrice de-margined consensus · devnet<br />Priced: match result · goal totals · handicaps<br />Not priced: BTTS · corners · cards</p>
+          <p className="mknote">Fair odds by TxODDS<br />Match result · total goals · handicaps<br />More markets coming</p>
         </div>
       </div>
       </div>

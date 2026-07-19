@@ -5,11 +5,11 @@ export default function Landing() {
     <div className="wrap">
       <div className="brand" style={{ marginTop: 26 }}>
         <h1>FAIR<b>LINE</b></h1>
-        <div className="net">TxODDS VERIFIED · SOLANA</div>
+        <div className="net">FAIR ODDS · VERIFIED</div>
       </div>
       <div className="hero">
         <h2>Fair odds. No bookmaker.</h2>
-        <p>Live de-margined World Cup prices from TxODDS, verified on Solana.</p>
+        <p>Live fair World Cup odds. See what your bookie really charges.</p>
       </div>
       <Link href="/xray" className="tile">
         <span className="tile-t">ACCA X-RAY</span>
@@ -17,13 +17,13 @@ export default function Landing() {
       </Link>
       <a href={process.env.NEXT_PUBLIC_FAIRPLAY_URL ?? "#"} className="tile">
         <span className="tile-t">FAIRPLAY ↗</span>
-        <span className="tile-d">Our P2P exchange. Take your fair odds to market.</span>
+        <span className="tile-d">Back a bet or take one, at fair odds. No bookmaker.</span>
       </a>
       <Link href="/xray" className="tile">
         <span className="tile-t">LIVE MARKETS</span>
-        <span className="tile-d">Result, goals, handicaps. Tonight and the final.</span>
+        <span className="tile-d">Match result, goals and handicaps for the final.</span>
       </Link>
-      <p className="foot" style={{ marginTop: 26 }}>Wallet only needed to place or take a bet.<br />X-ray is free, no sign-up.</p>
+      <p className="foot" style={{ marginTop: 26 }}>The X-ray is free. No sign-up.<br />Wallet only needed to place a bet.</p>
     </div>
   );
 }

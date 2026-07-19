@@ -104,8 +104,8 @@ export async function liveBoard() {
   const fixtures = await liveFixtures();
   if (!fixtures) return null;
   const now = Date.now();
-  // upcoming = kicks off in the future (or last 2h), regardless of state-flag quirks
-  const upcoming = fixtures.filter((f) => f.startTime > now - 2 * 3600_000 && f.gameState !== 3);
+  // strictly upcoming: kickoff in the future, nothing started or played
+  const upcoming = fixtures.filter((f) => f.startTime > now && f.gameState !== 3);
   const markets: Record<number, LiveMarket[]> = {};
   for (const f of upcoming) markets[f.fixtureId] = await liveMarkets(f.fixtureId);
   return { fixtures, upcoming, markets };
