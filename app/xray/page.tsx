@@ -124,6 +124,23 @@ export default function Page() {
     setStep(1); setScanOn(false); setTimeout(() => setScanOn(true), 60);
   };
 
+  const deriveLegPrices = (legs: any[], comboPrice: number | null) => {
+    if (!comboPrice || comboPrice <= 1) return legs;
+    const priced = legs.filter((l) => l.matched && l.fairPrice && l.bookiePrice > 1);
+    const unpriced = legs.filter((l) => l.matched && l.fairPrice && !(l.bookiePrice > 1));
+    if (!unpriced.length) return legs;
+    const pricedProd = priced.reduce((a, l) => a * l.bookiePrice, 1);
+    const fairProd = unpriced.reduce((a, l) => a * l.fairPrice, 1);
+    const base = comboPrice / (pricedProd * fairProd);
+    if (base <= 0) return legs;
+    const k = Math.pow(base, 1 / unpriced.length);
+    return legs.map((l) =>
+      l.matched && l.fairPrice && !(l.bookiePrice > 1)
+        ? { ...l, bookiePrice: Number((l.fairPrice * k).toFixed(2)) }
+        : l
+    );
+  };
+
   const loadGroup = (g: any) => {
     const legs: SlipLeg[] = (g.legs ?? []).map((l: any) => ({
       fixtureId: l.fixtureId ?? "unmatched",
@@ -140,7 +157,7 @@ export default function Page() {
       matched: l.matched,
       ko: l.ko ?? null,
     } as any));
-    setSlip(legs);
+    setSlip(deriveLegPrices(legs, g.comboPrice ?? null));
     setAccaOverride(g.comboPrice ?? null);
     if (g.stake) setStake(g.stake);
   };
@@ -176,7 +193,7 @@ export default function Page() {
         ko: l.ko ?? null,
       }));
       if (!legs.length) { setScanMsg("No legs found on that image."); return; }
-      setSlip(legs);
+      setSlip(deriveLegPrices(legs, data.accaPrice ?? null));
       setAccaOverride(data.accaPrice ?? null);
       if (data.stake) setStake(data.stake);
       setScanMsg(`Read ${legs.length} legs · ${data.matchedCount} matched to TxLINE markets.`);
