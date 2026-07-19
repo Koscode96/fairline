@@ -292,7 +292,7 @@ export default function Page() {
           {!slipLoading && slip.length > 0 && <div className="card">
             {slip.map((l, i) => (
               <div className={`leg ${l.matched ? "" : "unmatched"}`} key={`${l.label}-${i}`}>
-                <div className="m">{l.label}<span>{l.sub}</span></div>
+                <div className="m">{l.label}<span>{l.matched && l.fairPrice ? (<>{(l.sub || "").split(" · fair ")[0]} · fair <b style={{ color: "var(--won)", fontWeight: 600 }}>{Number(l.fairPrice).toFixed(2)}</b></>) : l.sub}</span></div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <input className="num" type="number" step="0.01"
                     style={{ width: 92, flex: "none" }}

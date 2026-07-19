@@ -15,7 +15,9 @@ Return ONLY valid JSON, no markdown fences, no prose:
  "legs":[{"selection":"<text as shown>","homeTeam":"","awayTeam":"","market":"home_win|away_win|draw|over_goals|under_goals|btts|over_corners|over_cards|home_handicap|unknown","line":<number|null>,"price":<decimal odds|null>}],
  "accaPrice":<decimal|null>,"stake":<number|null>
 }
-Rules: convert fractional odds to decimal (e.g. 5/2 -> 3.5). market is from the enum only; if unsure use "unknown". homeTeam/awayTeam from the fixture line. line is the numeric handicap/total (2.5, 9.5) if present.`;
+Rules: convert fractional odds to decimal (e.g. 5/2 -> 3.5). market is from the enum only; if unsure use "unknown". homeTeam/awayTeam from the fixture line. line is the numeric handicap/total (2.5, 9.5) if present.
+A slip often contains MULTIPLE separate bets: a Bet Builder (several selections under one combined price) plus standalone singles with their own prices. If so, you may also return "bets":[{"kind":"builder|single","comboPrice":<decimal>,"stake":<number|null>,"legs":[<leg objects as above>]}] grouping them correctly; legs inside a builder have price null.
+CRITICAL: every selection line on the slip is its OWN leg. NEVER merge two selections into one leg. A Bet Builder listing N selections yields EXACTLY N legs ("Result: Spain" and "Over 2.5 Goals" are TWO separate legs, never one combined leg).`;
 
 type LiveCtx = { fixtures: { fixtureId: number; home: string; away: string }[]; markets: Record<number, LiveMarket[]> } | null;
 
