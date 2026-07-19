@@ -82,6 +82,7 @@ export default function Page() {
   );
   const [chosen, setChosen] = useState<number | null>(null);
   const worst = r ? matchedLegs[chosen ?? r.worstLegIndex] : null;
+  const worstFinished = Boolean(worst && (worst as any).ko && (worst as any).ko < Date.now());
   const settled = "won";
   const events = [
     { min: 34, type: "yellow", detail: "Yellow · De Paul (ARG)" },
@@ -446,7 +447,12 @@ export default function Page() {
             <div className="row"><span className="k">Settlement</span><span className="v" style={{ fontSize: 11 }}>Automatic · official result</span></div>
             <div className="row"><span className="k">Status</span>
               <span className={`pill ${betSig ? "won" : "open"}`}>{betSig ? "LIVE ON FAIRPLAY BOARD · AWAITING TAKER" : "AWAITING YOUR SIGNATURE"}</span></div>
-            {!betSig && (
+            {worstFinished && (
+              <p className="foot" style={{ textAlign: "left", margin: "10px 2px 0" }}>
+                MATCH FINISHED · analysis only. Pick a leg on an upcoming fixture to post a challenge.
+              </p>
+            )}
+            {!betSig && !worstFinished && (
               <button className="go" style={{ marginTop: 12 }} onClick={async () => {
                 const sig = await signBetCommitment({
                   app: "fairline", v: 1, market: worst.marketId, fixture: worst.fixtureId,
