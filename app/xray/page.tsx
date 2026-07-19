@@ -268,16 +268,17 @@ export default function Page() {
             {slip.map((l, i) => (
               <div className={`leg ${l.matched ? "" : "unmatched"}`} key={`${l.label}-${i}`}>
                 <div className="m">{l.label}<span>{l.sub}</span></div>
-                <input className="num" type="number" step="0.01"
-                  value={l.bookiePrice > 0 ? l.bookiePrice : ""}
-                  placeholder="—"
-                  
-                  disabled={!l.matched}
-                  onChange={(e) =>
-                    setSlip(slip.map((s, j) => (j === i ? { ...s, bookiePrice: +e.target.value || 0 } : s)))
-                  } />
-                <button className="mkpx" style={{ padding: "4px 8px", marginLeft: 6 }} title="Remove leg"
-                  onClick={() => setSlip(slip.filter((_, j) => j !== i))}>×</button>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <input className="num" type="number" step="0.01"
+                    value={l.bookiePrice > 0 ? l.bookiePrice : ""}
+                    placeholder="combo"
+                    disabled={!l.matched}
+                    onChange={(e) =>
+                      setSlip(slip.map((s, j) => (j === i ? { ...s, bookiePrice: +e.target.value || 0 } : s)))
+                    } />
+                  <button className="mkpx" style={{ padding: "4px 9px", flex: "none" }} title="Remove leg"
+                    onClick={() => setSlip(slip.filter((_, j) => j !== i))}>×</button>
+                </div>
               </div>
             ))}
             <div className="totrow">
