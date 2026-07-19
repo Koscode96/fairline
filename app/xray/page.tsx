@@ -137,6 +137,7 @@ export default function Page() {
         fairPrice: l.fairPrice ?? 0,
         proofRef: l.proofRef ?? undefined,
         matched: l.matched,
+        ko: l.ko ?? null,
       }));
       if (!legs.length) { setScanMsg("No legs found on that image."); return; }
       setSlip(legs);
@@ -306,7 +307,7 @@ export default function Page() {
             <div className="row"><span className="k">Market</span><span className="v">{worst.label.split("·").pop()?.trim()}</span></div>
             <div className="row"><span className="k">Your price (fair)</span><span className="v">{worst.fairPrice.toFixed(2)}</span></div>
             <div className="row"><span className="k">Bookie wanted</span><span className="v" style={{ color: "var(--faint)", textDecoration: "line-through" }}>{worst.bookiePrice.toFixed(2)}</span></div>
-            <div className="row"><span className="k">Stake</span><span className="v">£10.00</span></div>
+            <div className="row"><span className="k">Stake</span><span className="v">£{stake.toFixed(2)}</span></div>
             <div className="row"><span className="k">Settlement</span><span className="v" style={{ fontSize: 11 }}>Automatic · official result</span></div>
             <div className="row"><span className="k">Status</span>
               <span className={`pill ${betSig ? "won" : "open"}`}>{betSig ? "LIVE ON FAIRPLAY BOARD · AWAITING TAKER" : "AWAITING YOUR SIGNATURE"}</span></div>
@@ -314,7 +315,7 @@ export default function Page() {
               <button className="go" style={{ marginTop: 12 }} onClick={async () => {
                 const sig = await signBetCommitment({
                   app: "fairline", v: 1, market: worst.marketId, fixture: worst.fixtureId,
-                  price: worst.fairPrice, stake: 10, side: "for", ts: Date.now(),
+                  price: worst.fairPrice, stake, side: "for", ts: Date.now(),
                 });
                 if (sig) setBetSig(sig);
               }}>
@@ -392,10 +393,11 @@ export default function Page() {
                     {g.under && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "under_goals", g.line, `${f.home} v ${f.away} · Under ${g.line} goals`, g.under)}><small>U</small>{g.under.toFixed(2)}</button>}
                   </div>
                 ))}
-                {f.handicap.filter((h: any) => h.home).slice(0, 3).map((h: any) => (
+                {f.handicap.filter((h: any) => h.home || h.away).slice(0, 4).map((h: any) => (
                   <div className="mkrow" key={`h${h.line}`}>
                     <span className="mklabel">AH {h.line}</span>
-                    <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_handicap", h.line, `${f.home} ${h.line >= 0 ? "+" : ""}${h.line} v ${f.away}`, h.home)}><small>1</small>{h.home.toFixed(2)}</button>
+                    {h.home && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_handicap", h.line, `${f.home} ${h.line >= 0 ? "+" : ""}${h.line} v ${f.away}`, h.home)}><small>1</small>{h.home.toFixed(2)}</button>}
+                    {h.away && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "away_handicap", -h.line, `${f.away} ${-h.line >= 0 ? "+" : ""}${-h.line} v ${f.home}`, h.away)}><small>2</small>{h.away.toFixed(2)}</button>}
                   </div>
                 ))}
               </div>

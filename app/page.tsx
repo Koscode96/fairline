@@ -17,7 +17,7 @@ export default function Landing() {
       </Link>
       <a href={process.env.NEXT_PUBLIC_FAIRPLAY_URL ?? "#"} className="tile">
         <span className="tile-t">FAIRPLAY ↗</span>
-        <span className="tile-d">Continues on FairPlay, our exchange. Back your X-rayed slip at fair odds, or take someone else&rsquo;s.</span>
+        <span className="tile-d">Back a bet or take one, at fair odds. No bookmaker.</span>
       </a>
       <Link href="/xray" className="tile">
         <span className="tile-t">LIVE MARKETS</span>
