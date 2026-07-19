@@ -380,12 +380,12 @@ export default function Page() {
             return (
               <div className="mkfix" key={f.fixtureId}>
                 <div className="mkhead"><div>{f.home} v {f.away}</div><span>KO {ko}</span></div>
-                <div className="mkrow">
+                {(f.oneX2.home || f.oneX2.draw || f.oneX2.away) && <div className="mkrow">
                   <span className="mklabel">RESULT</span>
                   {f.oneX2.home && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_win", undefined, `${f.home} to beat ${f.away}`, f.oneX2.home)}><small>1</small>{f.oneX2.home.toFixed(2)}</button>}
                   {f.oneX2.draw && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "draw", undefined, `${f.home} v ${f.away} · Draw`, f.oneX2.draw)}><small>X</small>{f.oneX2.draw.toFixed(2)}</button>}
                   {f.oneX2.away && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "away_win", undefined, `${f.away} to beat ${f.home}`, f.oneX2.away)}><small>2</small>{f.oneX2.away.toFixed(2)}</button>}
-                </div>
+                </div>}
                 {f.goals.filter((g: any) => g.over || g.under).slice(0, 4).map((g: any) => (
                   <div className="mkrow" key={`g${g.line}`}>
                     <span className="mklabel">GOALS {g.line}</span>
