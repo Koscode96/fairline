@@ -66,7 +66,7 @@ export default function Page() {
     return () => clearTimeout(t);
   }, []);
 
-  const matchedLegs = useMemo(() => slip.filter((l) => l.matched && l.fairPrice), [slip]);
+  const matchedLegs = useMemo(() => slip.filter((l) => l.matched && l.fairPrice && l.bookiePrice > 1), [slip]);
   const legsProduct = useMemo(
     () => matchedLegs.reduce((a, l) => a * l.bookiePrice, 1),
     [matchedLegs]
@@ -123,7 +123,8 @@ export default function Page() {
       sub: l.matched
         ? `${l.homeTeam} v ${l.awayTeam} · fair ${Number(l.fairPrice).toFixed(2)}`
         : "No fair price available for this market yet",
-      bookiePrice: l.bookiePrice ?? 2,
+      bookiePrice: l.bookiePrice ?? 0,
+      priceRead: l.bookiePrice != null,
       fairPrice: l.fairPrice ?? 0,
       proofRef: l.proofRef ?? undefined,
       matched: l.matched,
@@ -157,7 +158,8 @@ export default function Page() {
         sub: l.matched
           ? `${l.homeTeam} v ${l.awayTeam} · fair ${Number(l.fairPrice).toFixed(2)}`
           : "No fair price available for this market yet",
-        bookiePrice: l.bookiePrice ?? 2,
+        bookiePrice: l.bookiePrice ?? 0,
+        priceRead: l.bookiePrice != null,
         fairPrice: l.fairPrice ?? 0,
         proofRef: l.proofRef ?? undefined,
         matched: l.matched,
@@ -222,6 +224,11 @@ export default function Page() {
               onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
           </label>
           {scanMsg && <p className="foot" style={{ marginTop: 0, marginBottom: 12 }}>{scanMsg}</p>}
+          {slip.some((l: any) => l.matched && !(l.bookiePrice > 1)) && (
+            <p className="foot" style={{ margin: "0 2px 12px", textAlign: "left", color: "var(--margin)" }}>
+              Some leg prices were not shown on the slip. Enter them from your bookie&rsquo;s singles view to include those legs.
+            </p>
+          )}
           {betGroups.length > 1 && (
             <div className="mkrow" style={{ marginBottom: 12, flexWrap: "wrap" }}>
               {betGroups.map((g, i) => (
@@ -251,7 +258,10 @@ export default function Page() {
             {slip.map((l, i) => (
               <div className={`leg ${l.matched ? "" : "unmatched"}`} key={`${l.label}-${i}`}>
                 <div className="m">{l.label}<span>{l.sub}</span></div>
-                <input className="num" type="number" step="0.01" value={l.bookiePrice}
+                <input className="num" type="number" step="0.01"
+                  value={l.bookiePrice > 0 ? l.bookiePrice : ""}
+                  placeholder="price?"
+                  style={(l as any).priceRead === false && l.matched && !(l.bookiePrice > 1) ? { borderColor: "var(--margin)" } : {}}
                   disabled={!l.matched}
                   onChange={(e) =>
                     setSlip(slip.map((s, j) => (j === i ? { ...s, bookiePrice: +e.target.value || s.bookiePrice } : s)))
@@ -262,7 +272,7 @@ export default function Page() {
               <label>Bookie&rsquo;s acca price
                 <button className={`autochip ${accaOverride === null ? "on" : ""}`}
                   onClick={() => setAccaOverride(null)}
-                  title="Auto = product of the legs above">
+                  title="AUTO: the acca price recalculates as your leg prices multiplied. Scanning a slip locks the bookie printed combo price instead. Click to snap back to the calculated product.">
                   {accaOverride === null ? "AUTO ✓" : "RESET TO AUTO"}
                 </button>
               </label>
@@ -279,7 +289,7 @@ export default function Page() {
       {step === 1 && r && (
         <section>
           <div className="card verdict">
-            <p className="eyebrow" style={{ marginLeft: 0 }}>Margin X-ray</p>
+            <p className="eyebrow" style={{ marginLeft: 0 }}>Margin X-ray · prices as of {new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</p>
             <div className="big">{r.accaMarginPct.toFixed(1)}<small>%</small></div>
             <p>is what this acca charges you above the verified fair price.<br />
               <b>£{stake.toFixed(0)} staked → expected value −£{Math.abs(r.expectedValueAbs).toFixed(2)}.</b></p>
@@ -334,7 +344,7 @@ export default function Page() {
               v: 1, acca: r.accaBookiePrice, stake,
               legs: slip.map((l) => ({ label: l.label, bookie: l.bookiePrice, fair: l.fairPrice, matched: l.matched })),
             })}`;
-            const t = `My acca charges ${r.accaMarginPct.toFixed(1)}% over fair. X-rayed on Fairline:`;
+            const t = `Check how much extra the bookies are charging me: ${r.accaMarginPct.toFixed(1)}% over the verified fair price on this slip. X-rayed on Fairline:`;
             const res = await shareText(t, cardUrl);
             setShared(res === "copied" ? "COPIED TO CLIPBOARD ✓" : res ? "SHARED ✓" : null);
             setTimeout(() => setShared(null), 2200);

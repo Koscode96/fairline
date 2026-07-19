@@ -43,6 +43,15 @@ function XCard() {
       <Link href="/xray" className="go" style={{ display: "block", textAlign: "center", textDecoration: "none", marginTop: 14 }}>
         RUN YOUR OWN X-RAY →
       </Link>
+      {r && (
+        <div className="mkrow" style={{ marginTop: 10, justifyContent: "center" }}>
+          <a className="mkpx" style={{ textDecoration: "none" }} target="_blank" rel="noreferrer"
+            href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check how much extra the bookies are charging: ${r.accaMarginPct.toFixed(1)}% over the verified fair price. X-rayed on Fairline`)}&url=${encodeURIComponent(typeof window !== "undefined" ? window.location.href : "")}`}>
+            POST TO X ↗
+          </a>
+          <button className="mkpx" onClick={() => navigator.clipboard.writeText(window.location.href)}>COPY LINK</button>
+        </div>
+      )}
       <p className="foot">Fair odds verified by TxODDS.<br />Every price independently checkable.</p>
     </div>
   );
