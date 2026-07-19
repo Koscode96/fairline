@@ -329,9 +329,9 @@ export default function Page() {
         <section>
           <div className="card verdict">
             <p className="eyebrow" style={{ marginLeft: 0 }}>Margin X-ray · prices as of {new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</p>
-            <div className="big">{r.accaMarginPct.toFixed(1)}<small>%</small></div>
-            <p>is what this acca charges you above the verified fair price.<br />
-              <b>£{stake.toFixed(0)} staked → expected value −£{Math.abs(r.expectedValueAbs).toFixed(2)}.</b></p>
+            <div className="big" style={r.accaMarginPct < 0 ? { color: "var(--won)" } : {}}>{r.accaMarginPct >= 0 ? "" : ""}{Math.abs(r.accaMarginPct).toFixed(1)}<small>%</small></div>
+            <p>{r.accaMarginPct >= 0 ? "is what this acca charges you above the verified fair price." : "BELOW the verified fair price. This price beats fair."}<br />
+              <b>£{stake.toFixed(0)} staked → expected value {r.expectedValueAbs >= 0 ? "+" : "−"}£{Math.abs(r.expectedValueAbs).toFixed(2)}.</b></p>
             <div className="mkrow" style={{ margin: "12px 0 2px", alignItems: "center" }}>
               <span className="mklabel" style={{ width: "auto" }}>THEIR ACCA</span>
               <input className="num" type="number" step="0.01" value={accaPrice}
@@ -348,7 +348,7 @@ export default function Page() {
             <div className="kv">
               <div><div className="k">Their price</div><div className="v">{r.accaBookiePrice.toFixed(2)}</div></div>
               <div><div className="k">Fair price</div><div className="v" style={{ color: "var(--won)" }}>{r.accaFairPrice.toFixed(2)}</div></div>
-              <div><div className="k">EV / £{stake.toFixed(0)}</div><div className="v neg">−£{Math.abs(r.expectedValueAbs).toFixed(2)}</div></div>
+              <div><div className="k">EV / £{stake.toFixed(0)}</div><div className="v" style={{ color: r.expectedValueAbs >= 0 ? "var(--won)" : "var(--lost)" }}>{r.expectedValueAbs >= 0 ? "+" : "−"}£{Math.abs(r.expectedValueAbs).toFixed(2)}</div></div>
             </div>
           </div>
           <p className="eyebrow">Per-leg scan</p>
@@ -360,7 +360,7 @@ export default function Page() {
                 <div className="scanleg" key={`${l.label}-${i}`}>
                   <div className="top">
                     <div className={`lbl ${i === r.worstLegIndex ? "worst" : ""}`}>{l.label}{i === r.worstLegIndex ? " ← worst leg" : ""}</div>
-                    <div className="pm">+{l.marginPct.toFixed(1)}%</div>
+                    <div className="pm" style={l.marginPct < 0 ? { color: "var(--won)" } : {}}>{l.marginPct >= 0 ? "+" : ""}{l.marginPct.toFixed(1)}%</div>
                   </div>
                   <div className="bar">
                     <div className="fair" style={{ width: scanOn ? `${fairW}%` : 0 }} />
