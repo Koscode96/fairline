@@ -178,6 +178,13 @@ export default function Page() {
       });
       const data = await resp.json();
       if (!resp.ok) { setScanMsg(data.error ?? "Could not read that slip · try a clearer screenshot."); return; }
+      if (Array.isArray(data.bets) && data.bets.length > 1) {
+        setBetGroups(data.bets);
+        setActiveGroup(0);
+        loadGroup(data.bets[0]);
+        setScanMsg(`Read ${data.bets.length} bets · ${data.bets.map((b: any) => b.label).join(" · ")}`);
+        return;
+      }
       const legs: SlipLeg[] = (data.legs ?? []).map((l: any) => ({
         fixtureId: l.fixtureId ?? "unmatched",
         marketId: l.marketId,
