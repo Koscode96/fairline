@@ -270,6 +270,7 @@ export default function Page() {
                 <div className="m">{l.label}<span>{l.sub}</span></div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <input className="num" type="number" step="0.01"
+                    style={{ width: 92, flex: "none" }}
                     value={l.bookiePrice > 0 ? l.bookiePrice : ""}
                     placeholder="combo"
                     disabled={!l.matched}
