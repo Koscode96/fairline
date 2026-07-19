@@ -1,54 +1,54 @@
 # Fairline: Technical Documentation
 
-Consumer margin-transparency tool for the TxODDS World Cup Hackathon (Consumer & Fan Experiences track). Solo build.
+Consumer margin-transparency tool for the TxODDS World Cup Hackathon (Consumer and Fan Experiences track). Solo build.
 
 ## What it does
-Reads a punter's accumulator (via screenshot or built from a live market board), prices every leg against TxLINE StablePrice, and shows the hidden bookmaker margin, expected value, and a verifiable timestamp behind each fair price. Hands off to FairPlay (companion app) to take any leg peer-to-peer at the fair price.
+Reads a punter's slip from a screenshot, detects distinct bets within it (Bet Builders vs standalone singles), prices every leg against TxLINE StablePrice, and shows margin, expected value and worst leg on a fully reactive verdict. Hands any leg to FairPlay (companion app) as a fair-price P2P challenge.
 
 ## Stack
-- Next.js 15 (App Router), React 19, TypeScript. Deployed on Vercel.
-- TxLINE devnet subscription (service level 1, on-chain activation tx `574VwkR5HqLJoQNLo4Zk3WuGt1UZwpYXLk9NwdCKtiWKYSpsArWUkZojDPMSxGKCbnxRAX3uzSAxWFTFZKRuT9vW`).
-- Claude vision (claude-sonnet-4-6) for bet-slip OCR and structuring.
-- No database. Fairline is stateless; challenge state lives on FairPlay.
+- Next.js 15 (App Router), React 19, TypeScript. Vercel.
+- Upstash Redis (shared with FairPlay) for the accumulated market book.
+- TxLINE devnet subscription (service level 1, on-chain activation tx `574VwkR5...T9vW`).
+- Claude vision (claude-sonnet-4-6) for slip OCR, structuring and bet grouping.
 
 ## Architecture
 ```
-Browser (React client)
-  |- /api/txline/[...path]   server proxy; attaches JWT + X-Api-Token from env
-  |- /api/live-slip          builds starter slip from upcoming fixtures + live odds
-  |- /api/market-board       full accumulated market book per fixture
-  |- /api/parse-slip         Claude vision -> structured legs -> matched to live markets
-  |- /api/post-to-fairplay   relays a signed challenge onto the FairPlay order book
-lib/
-  engine.ts        de-margin and EV maths (pure functions, unit tested)
-  markets.ts       market DSL: human bets -> stat predicates; settlement rules
-  txline-server.ts TxLINE client, fixture filter (strictly future), market accumulation
-  phantom.ts       wallet connect, message signing, Solana memo recording
+/                       landing
+/xray                   scanner, live board, reactive X-ray, FairPlay handoff
+/x?d=...                shareable verdict card (whole X-ray encoded in the link)
+/api/parse-slip         vision -> grouped bets -> live-market matching
+/api/market-board       accumulated book per fixture (+ historical showcase)
+/api/live-slip          starter legs from upcoming fixtures
+/api/post-to-fairplay   server relay of signed challenges onto FairPlay's book
+/api/txline/[...path]   credentialed proxy
+lib/: engine (margins/EV), markets DSL, txline-server (fixtures, Redis book),
+      phantom (sign/anchor), bet-codec, xray-codec, flags
 ```
 
-## TxLINE integration
-- Auth: guest JWT (`POST /auth/guest/start`) plus API token from on-chain subscribe and signed activation (`${txSig}:${leagues}:${jwt}` preimage). Both sent on every call (`Authorization: Bearer`, `X-Api-Token`). Credentials are held server-side only; the browser never sees them.
-- Endpoints used: `/fixtures/snapshot`, `/odds/snapshot/{fixtureId}`, `/scores/snapshot/{fixtureId}`.
-- StablePrice semantics: prices arrive as integers x1000 with implied percentages summing to 100, i.e. the feed is already de-margined. Verified empirically before relying on it.
-- Snapshot behaviour: each odds snapshot returns a rolling window of recent price messages, not the full book. The client accumulates markets across calls (dedupe by market+line, keep latest publish timestamp) so the visible book converges to complete.
-- Fixture policy: strictly upcoming only (`startTime > now`, not finished).
+## Data layer
+- **Market book (Redis, shared with FairPlay).** Devnet odds snapshots return a rolling window of recent messages, not the full book, so every line seen is accumulated into `fairplay:markets:{fixtureId}` (dedupe by market+line, latest publish wins). The book survives deploys and cold starts.
+- **Fixture discovery is competition-agnostic.** Unfiltered fixtures snapshot first (everything the free tier covers: World Cup, International Friendlies, EPL), falling back to `TXLINE_COMPETITION_IDS`. Strictly-future filter for live fixtures.
+- **Historical showcase.** The World Cup final's fair book, captured before kick-off, is served from Redis as a labelled showcase fixture and remains matchable by the scanner. Finished-match legs are analysis-only: X-ray works, posting is disabled.
 
-## Margin engine
-- Implied probability p = 1/price. Overround = sum(p) - 1.
-- Leg margin = p(bookie)/p(fair) - 1.
-- Acca fair price = product of fair leg prices; margin compounds multiplicatively, which is the core consumer insight (a 5% per-leg margin on a 4-fold is ~21.5%).
-- EV = stake x (bookiePrice x fairProb - 1).
-- Legs without a StablePrice market are declined, never estimated.
+## Slip pipeline
+1. Vision prompt returns grouped bets; hard rule: N selections = N legs, merging forbidden; builder legs carry no price.
+2. Deterministic server splitter: any leg with its own read price inside a multi-leg group is a standalone single (builders never print leg odds).
+3. Legs matched to live+showcase markets with team-order flipping; kickoff time attached for downstream KO cutoffs.
+4. Client renders bet-group chips; each bet loads and X-rays independently.
 
-## Slip scanning
-Screenshot -> base64 -> server route -> Claude vision with a strict JSON schema (teams, market enum, line, decimal odds; fractional odds converted). Output is matched against live fixtures and markets with team-order flipping. Unmatched legs are shown and excluded from the maths.
+## Honest maths (the important invariants)
+- Fair prices come solely from StablePrice (implied probabilities sum to 100; verified empirically).
+- A printed combo price is only locked/apportioned when EVERY leg has a verified fair price. Otherwise legs seed at fair on AUTO with an explanation; nothing incomparable is ever presented as margin.
+- Unpriced markets are declined and shown EXCLUDED; per-leg margins render only where a real bookie price exists (scanned, derived from a fully-comparable combo, or typed).
+- Sign-correct display: positive margin (skim) in accent, negative (price beats fair) in green with flipped copy.
+- Engine: p = 1/price; leg margin = p(bookie)/p(fair) - 1; acca fair = product of fair legs; EV = stake x (price x fairProb - 1). Reactive: every figure recomputes on edit.
 
-## Wallet and proofs
-Phantom via `window.phantom` (no adapter dependency). Challenges are signed (ed25519 over the bet terms) and can be recorded as Solana devnet Memo transactions; the UI links to the explorer transaction.
+## Sharing
+The verdict encodes into `/x?d=...` (base64url payload: legs, prices, stake). Recipient renders the full X-ray client-side with excluded legs and a run-your-own CTA, plus Post-to-X and copy-link.
 
 ## Environment
-`TXLINE_API_ORIGIN`, `TXLINE_JWT`, `TXLINE_API_TOKEN`, `ANTHROPIC_API_KEY`, `NEXT_PUBLIC_FAIRPLAY_URL`.
+`TXLINE_API_ORIGIN`, `TXLINE_JWT`, `TXLINE_API_TOKEN`, `ANTHROPIC_API_KEY`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `NEXT_PUBLIC_FAIRPLAY_URL`, optional `TXLINE_COMPETITION_IDS`.
 
 ## Known limits
-- Devnet StablePrice covers match result, goal totals and Asian handicaps (FT and H1). BTTS, corners and cards are settleable from the scores feed but not priced, so they are excluded from X-rays.
-- Guest JWT expires periodically; reactivation is a one-command script (`scripts/activate.mjs`).
+- Same-game combined fair pricing (correlation-aware builders) is roadmap; today combos of correlated legs are labelled "legs multiplied" on FairPlay and never asserted as joint-fair here.
+- Guest JWT expires periodically; reactivation via `scripts/activate.mjs`.
