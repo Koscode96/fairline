@@ -347,7 +347,7 @@ export default function Page() {
             </div>
             <div className="kv">
               <div><div className="k">Their price</div><div className="v">{r.accaBookiePrice.toFixed(2)}</div></div>
-              <div><div className="k">Fair price</div><div className="v">{r.accaFairPrice.toFixed(2)}</div></div>
+              <div><div className="k">Fair price</div><div className="v" style={{ color: "var(--won)" }}>{r.accaFairPrice.toFixed(2)}</div></div>
               <div><div className="k">EV / £{stake.toFixed(0)}</div><div className="v neg">−£{Math.abs(r.expectedValueAbs).toFixed(2)}</div></div>
             </div>
           </div>
@@ -372,7 +372,7 @@ export default function Page() {
                       <input className="num" type="number" step="0.01" value={l.bookiePrice}
                         style={{ width: 64, padding: "3px 5px", fontSize: 11 }}
                         onChange={(e) => updateLegPrice(legKey(l), +e.target.value || 0)} />
-                      · fair {l.fairPrice.toFixed(2)}
+                      · fair <span style={{ color: "var(--won)", fontWeight: 600 }}>{l.fairPrice.toFixed(2)}</span>
                       <button className="mkpx" style={{ padding: "2px 7px", fontSize: 10 }} title="Remove leg"
                         onClick={() => removeLeg(legKey(l))}>×</button>
                     </span>

@@ -148,3 +148,5 @@
   .leg .m{flex:1 1 auto;min-width:0}
   .leg input.num{width:84px !important;min-width:84px !important}
   .leg .mkpx{flex:none;padding:5px 9px !important}
+  .leg .m span, .scanleg .sub span{}
+  .fairhl{color:var(--won);font-weight:600}
