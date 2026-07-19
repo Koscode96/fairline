@@ -275,6 +275,19 @@ export default function Page() {
               );
             })}
           </div>
+          {slip.some((l) => !l.matched) && (
+            <div className="card" style={{ marginTop: 12 }}>
+              {slip.filter((l) => !l.matched).map((l, i) => (
+                <div className="scanleg unmatched" key={`x-${i}`}>
+                  <div className="top">
+                    <div className="lbl">{l.label}</div>
+                    <div className="pm" style={{ color: "var(--faint)" }}>EXCLUDED</div>
+                  </div>
+                  <div className="sub"><span>No fair price available for this market yet</span></div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="legend">
             <span><span className="sw" style={{ background: "#2E4160" }} />FAIR PRICE</span>
             <span><span className="sw" style={{ background: "repeating-linear-gradient(-55deg,var(--margin) 0 3px,transparent 3px 6px)" }} />MARGIN SKIMMED</span>
@@ -380,12 +393,12 @@ export default function Page() {
             return (
               <div className="mkfix" key={f.fixtureId}>
                 <div className="mkhead"><div>{f.home} v {f.away}</div><span>KO {ko}</span></div>
-                {(f.oneX2.home || f.oneX2.draw || f.oneX2.away) && <div className="mkrow">
+                <div className="mkrow">
                   <span className="mklabel">RESULT</span>
                   {f.oneX2.home && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "home_win", undefined, `${f.home} to beat ${f.away}`, f.oneX2.home)}><small>1</small>{f.oneX2.home.toFixed(2)}</button>}
                   {f.oneX2.draw && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "draw", undefined, `${f.home} v ${f.away} · Draw`, f.oneX2.draw)}><small>X</small>{f.oneX2.draw.toFixed(2)}</button>}
                   {f.oneX2.away && <button className="mkpx" onClick={() => addLeg(f.fixtureId, "away_win", undefined, `${f.away} to beat ${f.home}`, f.oneX2.away)}><small>2</small>{f.oneX2.away.toFixed(2)}</button>}
-                </div>}
+                </div>
                 {f.goals.filter((g: any) => g.over || g.under).slice(0, 4).map((g: any) => (
                   <div className="mkrow" key={`g${g.line}`}>
                     <span className="mklabel">GOALS {g.line}</span>
