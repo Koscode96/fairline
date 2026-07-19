@@ -145,7 +145,24 @@ export async function POST(req: NextRequest) {
     };
   });
 
-  const bets = rawBets.map((b: any, i: number) => {
+  // Builders never print leg odds. A leg with its own read price inside a
+  // multi-leg group is a standalone single — split it out deterministically.
+  const splitBets: any[] = [];
+  for (const b of rawBets) {
+    const legsIn = b.legs ?? [];
+    if (legsIn.length > 1) {
+      const singles = legsIn.filter((l: any) => l.price != null);
+      const builderLegs = legsIn.filter((l: any) => l.price == null);
+      if (singles.length && builderLegs.length) {
+        splitBets.push({ kind: b.kind ?? "builder", comboPrice: b.comboPrice ?? null, stake: b.stake ?? null, legs: builderLegs });
+        for (const s of singles) splitBets.push({ kind: "single", comboPrice: s.price, stake: null, legs: [s] });
+        continue;
+      }
+    }
+    splitBets.push(b);
+  }
+
+  const bets = splitBets.map((b: any, i: number) => {
     const legs = mapLegs(b.legs ?? []);
     return {
       kind: b.kind ?? (legs.length > 1 ? "acca" : "single"),

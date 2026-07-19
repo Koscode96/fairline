@@ -129,9 +129,9 @@ export default function Page() {
     const priced = legs.filter((l) => l.matched && l.fairPrice && l.bookiePrice > 1);
     const unpriced = legs.filter((l) => l.matched && l.fairPrice && !(l.bookiePrice > 1));
     if (!unpriced.length) return legs;
-    const pricedProd = priced.reduce((a, l) => a * l.bookiePrice, 1);
+    if (priced.length) return legs; // mixed group: don't guess, split handles it
     const fairProd = unpriced.reduce((a, l) => a * l.fairPrice, 1);
-    const base = comboPrice / (pricedProd * fairProd);
+    const base = comboPrice / fairProd;
     if (base <= 0) return legs;
     const k = Math.pow(base, 1 / unpriced.length);
     return legs.map((l) =>
